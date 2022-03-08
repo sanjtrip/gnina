@@ -1,13 +1,13 @@
 /*
  * Interface for reusing a single memory buffer 
- * to avoid repeated calls to cudaMalloc
+ * to avoid repeated calls to hipMalloc
  */
 #include "device_buffer.h"
 #include <cmath>
 #include "gpu_util.h"
 #include <cassert>
 #include <boost/thread/thread.hpp>
-#include <cuda.h>
+#include <hip/hip_runtime.h>
 
 #define align_down_pow2(n, size)            \
     ((decltype (n)) ((uintptr_t) (n) & ~((size) - 1)))
@@ -17,10 +17,10 @@
 
 size_t available_mem(size_t num_cpu_threads) {
   size_t free, total;
-  cudaError_t res;
-  res = cudaMemGetInfo(&free, &total);
-  if (res != cudaSuccess) {
-    std::cerr << "cudaMemGetInfo returned status " << res << "\n";
+  hipError_t res;
+  res = hipMemGetInfo(&free, &total);
+  if (res != hipSuccess) {
+    std::cerr << "hipMemGetInfo returned status " << res << "\n";
     return 1;
   }
   return (free / num_cpu_threads) * .8;
@@ -34,7 +34,7 @@ device_buffer::device_buffer()
 
 void device_buffer::init(size_t capacity) {
   this->capacity = capacity;
-  CUDA_CHECK_GNINA(cudaMalloc(&begin, capacity));
+  CUDA_CHECK_GNINA(hipMalloc(&begin, capacity));
   next_alloc = begin;
 }
 
@@ -43,14 +43,14 @@ bool device_buffer::has_space(size_t n_bytes) {
   return capacity - bytes_used >= n_bytes;
 }
 
-cudaError_t device_alloc_bytes(void **alloc, size_t n_bytes) {
+hipError_t device_alloc_bytes(void **alloc, size_t n_bytes) {
   // static here gives us lazy initialization and saves us from
   // constructing a thread_buffer for non-worker threads not included in
   // the available_mem() calculation.
   return thread_buffer.alloc((char **) alloc, n_bytes);
 }
 
-cudaError_t device_free(void *buf) {
+hipError_t device_free(void *buf) {
   return thread_buffer.dealloc(buf);
 }
 
@@ -60,13 +60,13 @@ void device_buffer::resize(size_t n_bytes) {
           || !(std::cerr
               << "Device buffer only supports resize when buffer is empty.\n"));
   if (n_bytes > capacity) {
-    CUDA_CHECK_GNINA(cudaFree(begin));
-    CUDA_CHECK_GNINA(cudaMalloc(&begin, n_bytes));
+    CUDA_CHECK_GNINA(hipFree(begin));
+    CUDA_CHECK_GNINA(hipMalloc(&begin, n_bytes));
     capacity = n_bytes;
   }
 }
 
-cudaError_t device_buffer::alloc_bytes(void** alloc, size_t n_bytes) {
+hipError_t device_buffer::alloc_bytes(void** alloc, size_t n_bytes) {
   //N.B. you need to resize appropriately before starting to copy into the
   //buffer. This function avoids resizing so data structures in the buffer can use
   //pointers, and the only internal protection is the following assert.
@@ -80,11 +80,11 @@ cudaError_t device_buffer::alloc_bytes(void** alloc, size_t n_bytes) {
   }
   *alloc = (void *) next_alloc;
   next_alloc = align_up_pow2(next_alloc + n_bytes, 128);
-  return cudaSuccess;
+  return hipSuccess;
 }
 
 void* device_buffer::copy_bytes(void* cpu_object, size_t n_bytes,
-    cudaMemcpyKind kind) {
+    hipMemcpyKind kind) {
   assert(has_space(n_bytes));
   void *r;
   CUDA_CHECK_GNINA(alloc_bytes(&r, n_bytes));
@@ -93,5 +93,5 @@ void* device_buffer::copy_bytes(void* cpu_object, size_t n_bytes,
 }
 
 device_buffer::~device_buffer() {
-  CUDA_CHECK_GNINA(cudaFree(begin));
+  CUDA_CHECK_GNINA(hipFree(begin));
 }

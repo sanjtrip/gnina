@@ -197,6 +197,11 @@ __host__  __device__ qt angle_to_quaternion(const vec& rotation); // rotation ==
 __device__
 
 #endif
+
+// ROCm-Port
+#ifdef __HIP_PLATFORM_HCC__
+__host__ __device__ 
+#endif
 vec quaternion_to_angle(const qt& q);
 qt random_orientation(rng& generator);
 __host__ __device__ void quaternion_increment(qt& q, const vec& rotation);
@@ -302,6 +307,8 @@ __host__  __device__
       +a * dr + b * cr - c * br + d * ar);
 }
 
+// ROCm-Port
+__host__  __device__
 inline qt qt::operator/=(const qt& r) {
   const fl ar = r.R_component_1();
   const fl br = r.R_component_2();

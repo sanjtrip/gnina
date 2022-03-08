@@ -89,14 +89,14 @@ struct parallel_mc_aux {
             sizeof(atom_params[t.m.gdata.coords_size]));
         definitelyPinnedMemcpy(coords, t.m.gdata.coords,
             sizeof(atom_params[t.m.gdata.coords_size]),
-            cudaMemcpyDeviceToDevice);
+            hipMemcpyDeviceToDevice);
         t.m.gdata.coords = coords;
 
         vec *atom_coords;
         thread_buffer.alloc(&atom_coords,
             sizeof(vec[t.m.gdata.atom_coords_size]));
         definitelyPinnedMemcpy(atom_coords, t.m.gdata.atom_coords,
-            sizeof(vec[t.m.gdata.atom_coords_size]), cudaMemcpyDeviceToDevice);
+            sizeof(vec[t.m.gdata.atom_coords_size]), hipMemcpyDeviceToDevice);
         t.m.gdata.atom_coords = atom_coords;
 
         force_energy_tup *minus_forces;
@@ -104,7 +104,7 @@ struct parallel_mc_aux {
             sizeof(force_energy_tup[t.m.gdata.forces_size]));
         definitelyPinnedMemcpy(minus_forces, t.m.gdata.minus_forces,
             sizeof(force_energy_tup[t.m.gdata.forces_size]),
-            cudaMemcpyDeviceToDevice);
+            hipMemcpyDeviceToDevice);
         t.m.gdata.minus_forces = minus_forces;
 
         segment_node *device_nodes;
@@ -113,20 +113,20 @@ struct parallel_mc_aux {
         //TODO: we really just want to copy data device-to-device
         tree_gpu old_tree;
         definitelyPinnedMemcpy(&old_tree, t.m.gdata.treegpu, sizeof(tree_gpu),
-            cudaMemcpyDeviceToHost);
+            hipMemcpyDeviceToHost);
         unsigned num_nodes = old_tree.num_nodes;
         thread_buffer.alloc(&device_nodes, sizeof(segment_node[num_nodes]));
         thread_buffer.alloc(&force_torques, sizeof(gfloat4p[num_nodes]));
         definitelyPinnedMemcpy(device_nodes, old_tree.device_nodes,
-            sizeof(segment_node[num_nodes]), cudaMemcpyDeviceToDevice);
+            sizeof(segment_node[num_nodes]), hipMemcpyDeviceToDevice);
         definitelyPinnedMemcpy(force_torques, old_tree.force_torques,
-            sizeof(gfloat4p[num_nodes]), cudaMemcpyDeviceToDevice);
+            sizeof(gfloat4p[num_nodes]), hipMemcpyDeviceToDevice);
         tree_gpu* new_tree;
         thread_buffer.alloc(&new_tree, sizeof(tree_gpu));
         old_tree.device_nodes = device_nodes;
         old_tree.force_torques = force_torques;
         definitelyPinnedMemcpy(new_tree, &old_tree, sizeof(tree_gpu),
-            cudaMemcpyHostToDevice);
+            hipMemcpyHostToDevice);
         t.m.gdata.treegpu = new_tree;
 
         thread_buffer.alloc(&t.m.gdata.scratch, sizeof(float));

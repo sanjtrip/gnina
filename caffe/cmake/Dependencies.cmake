@@ -84,6 +84,8 @@ if(USE_LEVELDB)
 endif()
 
 # ---[ CUDA
+# Sanjay
+if (NOT DEFINED USE_ROCM)
 include(cmake/Cuda.cmake)
 if(NOT HAVE_CUDA)
   if(CPU_ONLY)
@@ -91,8 +93,10 @@ if(NOT HAVE_CUDA)
   else()
     message(WARNING "-- CUDA is not detected by cmake. Building without it...")
   endif()
-
-  list(APPEND Caffe_DEFINITIONS PUBLIC -DCPU_ONLY)
+  # Sanjay
+  if (NOT DEFINED USE_ROCM)
+    list(APPEND Caffe_DEFINITIONS PUBLIC -DCPU_ONLY)
+  endif()
 endif()
 
 if(USE_NCCL)
@@ -107,6 +111,7 @@ if(USE_NCCL)
   include_directories(SYSTEM ${NCCL_INCLUDE_DIR})
   list(APPEND Caffe_LINKER_LIBS ${NCCL_LIBRARIES})
   add_definitions(-DUSE_NCCL)
+endif()
 endif()
 
 # ---[ OpenCV
@@ -178,7 +183,9 @@ if(BUILD_python)
     if(BUILD_python_layer)
       list(APPEND Caffe_DEFINITIONS PRIVATE -DWITH_PYTHON_LAYER)
       list(APPEND Caffe_INCLUDE_DIRS PRIVATE ${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE_DIR} PUBLIC ${Boost_INCLUDE_DIRS})
-      list(APPEND Caffe_LINKER_LIBS PRIVATE ${PYTHON_LIBRARIES} PUBLIC ${Boost_LIBRARIES})
+      # Sanjay
+      #list(APPEND Caffe_LINKER_LIBS PRIVATE ${PYTHON_LIBRARIES} PUBLIC ${Boost_LIBRARIES})
+      list(APPEND Caffe_LINKER_LIBS PRIVATE ${PYTHON_LIBRARIES})
     endif()
   endif()
 endif()

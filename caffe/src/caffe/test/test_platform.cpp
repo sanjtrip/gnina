@@ -10,7 +10,7 @@
 
 namespace caffe {
 
-extern cudaDeviceProp CAFFE_TEST_CUDA_PROP;
+extern hipDeviceProp_t CAFFE_TEST_CUDA_PROP;
 
 class PlatformTest : public ::testing::Test {};
 

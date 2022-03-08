@@ -45,18 +45,18 @@ class CuDNNConvolutionLayer : public ConvolutionLayer<Dtype> {
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 
   bool handles_setup_;
-  cudnnHandle_t* handle_;
-  cudaStream_t*  stream_;
+  hipdnnHandle_t* handle_;
+  hipStream_t*  stream_;
 
   // algorithms for forward and backwards convolutions
-  cudnnConvolutionFwdAlgo_t *fwd_algo_;
-  cudnnConvolutionBwdFilterAlgo_t *bwd_filter_algo_;
-  cudnnConvolutionBwdDataAlgo_t *bwd_data_algo_;
+  hipdnnConvolutionFwdAlgo_t *fwd_algo_;
+  hipdnnConvolutionBwdFilterAlgo_t *bwd_filter_algo_;
+  hipdnnConvolutionBwdDataAlgo_t *bwd_data_algo_;
 
-  vector<cudnnTensorDescriptor_t> bottom_descs_, top_descs_;
-  cudnnTensorDescriptor_t    bias_desc_;
-  cudnnFilterDescriptor_t      filter_desc_;
-  vector<cudnnConvolutionDescriptor_t> conv_descs_;
+  vector<hipdnnTensorDescriptor_t> bottom_descs_, top_descs_;
+  hipdnnTensorDescriptor_t    bias_desc_;
+  hipdnnFilterDescriptor_t      filter_desc_;
+  vector<hipdnnConvolutionDescriptor_t> conv_descs_;
   int bottom_offset_, top_offset_, bias_offset_;
 
   size_t *workspace_fwd_sizes_;

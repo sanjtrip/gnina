@@ -25,7 +25,7 @@
 
 #include <vector>
 #include "triangular_matrix_index.h"
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include "gpu_util.h"
 #include "device_buffer.h"
 
@@ -137,7 +137,7 @@ struct triangular_matrix_gpu {
           device_malloc(&m_data, sizeof(T) * cpu_matrix.m_data.size()));
       CUDA_CHECK_GNINA(
           definitelyPinnedMemcpy(m_data, &cpu_matrix.m_data[0],
-              sizeof(T) * cpu_matrix.m_data.size(), cudaMemcpyHostToDevice));
+              sizeof(T) * cpu_matrix.m_data.size(), hipMemcpyHostToDevice));
     }
 
     ~triangular_matrix_gpu() {

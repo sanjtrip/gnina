@@ -17,7 +17,7 @@ void cache_gpu::populate(const model& m, const precalculate& p,
   }
 
   definitelyPinnedMemcpy(info.types, &movingtypes[0],
-      sizeof(unsigned[info.num_movable_atoms]), cudaMemcpyHostToDevice);
+      sizeof(unsigned[info.num_movable_atoms]), hipMemcpyHostToDevice);
 
   //set up grids
   info.ngrids = grids.size();
@@ -27,6 +27,6 @@ void cache_gpu::populate(const model& m, const precalculate& p,
   }
   thread_buffer.alloc(&info.grids, sizeof(grid_gpu) * gpu_grids.size());
   definitelyPinnedMemcpy(info.grids, &gpu_grids[0],
-      sizeof(grid_gpu) * gpu_grids.size(), cudaMemcpyHostToDevice);
+      sizeof(grid_gpu) * gpu_grids.size(), hipMemcpyHostToDevice);
 }
 

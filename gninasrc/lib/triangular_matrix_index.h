@@ -24,7 +24,7 @@
 #define VINA_TRIANGULAR_MATRIX_INDEX_H
 
 #include "common.h"
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
 __host__   __device__   inline sz triangular_matrix_index(sz n, sz i, sz j) {
   assert(j < n);

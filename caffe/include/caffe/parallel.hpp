@@ -107,7 +107,7 @@ class NCCL : public GPUParams<Dtype>,
   void on_gradients_ready();
 
   ncclComm_t comm_;
-  cudaStream_t stream_;
+  hipStream_t stream_;
 
   shared_ptr<Solver<Dtype> > solver_;
   // Should not be necessary, https://github.com/NVIDIA/nccl/issues/37

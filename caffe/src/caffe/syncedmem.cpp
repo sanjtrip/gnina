@@ -8,7 +8,7 @@ SyncedMemory::SyncedMemory()
     own_cpu_data_(false), cpu_malloc_use_cuda_(false), own_gpu_data_(false) {
 #ifndef CPU_ONLY
 #ifdef DEBUG
-  CUDA_CHECK(cudaGetDevice(&device_));
+  CUDA_CHECK(hipGetDevice(&device_));
 #endif
 #endif
 }
@@ -18,7 +18,7 @@ SyncedMemory::SyncedMemory(size_t size)
     own_cpu_data_(false), cpu_malloc_use_cuda_(false), own_gpu_data_(false) {
 #ifndef CPU_ONLY
 #ifdef DEBUG
-  CUDA_CHECK(cudaGetDevice(&device_));
+  CUDA_CHECK(hipGetDevice(&device_));
 #endif
 #endif
 }
@@ -31,7 +31,7 @@ SyncedMemory::~SyncedMemory() noexcept(false) {
 
 #ifndef CPU_ONLY
   if (gpu_ptr_ && own_gpu_data_) {
-    CUDA_CHECK(cudaFree(gpu_ptr_));
+    CUDA_CHECK(hipFree(gpu_ptr_));
   }
 #endif  // CPU_ONLY
 }
@@ -47,7 +47,7 @@ void SyncedMemory::clear() {
 
 #ifndef CPU_ONLY
   if (gpu_ptr_ && own_gpu_data_) {
-    CUDA_CHECK(cudaFree(gpu_ptr_));
+    CUDA_CHECK(hipFree(gpu_ptr_));
     gpu_ptr_ = NULL;
   }
 #endif  // CPU_ONLY
@@ -86,14 +86,14 @@ inline void SyncedMemory::to_gpu() {
 #ifndef CPU_ONLY
   switch (head_) {
   case UNINITIALIZED:
-    CUDA_CHECK(cudaMalloc(&gpu_ptr_, size_));
+    CUDA_CHECK(hipMalloc(&gpu_ptr_, size_));
     caffe_gpu_memset(size_, 0, gpu_ptr_);
     head_ = HEAD_AT_GPU;
     own_gpu_data_ = true;
     break;
   case HEAD_AT_CPU:
     if (gpu_ptr_ == NULL) {
-      CUDA_CHECK(cudaMalloc(&gpu_ptr_, size_));
+      CUDA_CHECK(hipMalloc(&gpu_ptr_, size_));
       own_gpu_data_ = true;
     }
     caffe_gpu_memcpy(size_, cpu_ptr_, gpu_ptr_);
@@ -141,7 +141,7 @@ void SyncedMemory::set_gpu_data(void* data) {
 #ifndef CPU_ONLY
   CHECK(data);
   if (own_gpu_data_) {
-    CUDA_CHECK(cudaFree(gpu_ptr_));
+    CUDA_CHECK(hipFree(gpu_ptr_));
   }
   gpu_ptr_ = data;
   head_ = HEAD_AT_GPU;
@@ -171,15 +171,15 @@ void* SyncedMemory::mutable_gpu_data() {
 }
 
 #ifndef CPU_ONLY
-void SyncedMemory::async_gpu_push(const cudaStream_t& stream) {
+void SyncedMemory::async_gpu_push(const hipStream_t& stream) {
   check_device();
   CHECK(head_ == HEAD_AT_CPU);
   if (gpu_ptr_ == NULL) {
-    CUDA_CHECK(cudaMalloc(&gpu_ptr_, size_));
+    CUDA_CHECK(hipMalloc(&gpu_ptr_, size_));
     own_gpu_data_ = true;
   }
-  const cudaMemcpyKind put = cudaMemcpyHostToDevice;
-  CUDA_CHECK(cudaMemcpyAsync(gpu_ptr_, cpu_ptr_, size_, put, stream));
+  const hipMemcpyKind put = hipMemcpyHostToDevice;
+  CUDA_CHECK(hipMemcpyAsync(gpu_ptr_, cpu_ptr_, size_, put, stream));
   // Assume caller will synchronize on the stream before use
   head_ = SYNCED;
 }
@@ -189,11 +189,11 @@ void SyncedMemory::check_device() {
 #ifndef CPU_ONLY
 #ifdef DEBUG
   int device;
-  cudaGetDevice(&device);
+  hipGetDevice(&device);
   CHECK(device == device_);
   if (gpu_ptr_ && own_gpu_data_) {
-    cudaPointerAttributes attributes;
-    CUDA_CHECK(cudaPointerGetAttributes(&attributes, gpu_ptr_));
+    hipPointerAttribute_t attributes;
+    CUDA_CHECK(hipPointerGetAttributes(&attributes, gpu_ptr_));
     CHECK(attributes.device == device_);
   }
 #endif

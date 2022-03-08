@@ -24,31 +24,31 @@ using namespace boost::algorithm;
 
 //set the default device to device and return cuda error code if there's a problem
 int initializeCUDA(int device)  {
-  cudaError_t error;
-  cudaDeviceProp deviceProp;
+  hipError_t error;
+  hipDeviceProp_t deviceProp;
 
-  error = cudaSetDevice(device);
-  if (error != cudaSuccess) {
+  error = hipSetDevice(device);
+  if (error != hipSuccess) {
     //be silent if GPU not present
     return error;
   }
 
-  error = cudaGetDevice(&device);
+  error = hipGetDevice(&device);
 
-  if (error != cudaSuccess) {
-    std::cerr << "cudaGetDevice returned error code " << error << "\n";
+  if (error != hipSuccess) {
+    std::cerr << "hipGetDevice returned error code " << error << "\n";
     return error;
   }
 
-  error = cudaGetDeviceProperties(&deviceProp, device);
+  error = hipGetDeviceProperties(&deviceProp, device);
 
-  if (deviceProp.computeMode == cudaComputeModeProhibited) {
+  if (deviceProp.computeMode == hipComputeModeProhibited) {
     std::cerr
-        << "Error: device is running in <Compute Mode Prohibited>, no threads can use ::cudaSetDevice().\n";
+        << "Error: device is running in <Compute Mode Prohibited>, no threads can use ::hipSetDevice().\n";
     return -1;
   }
 
-  if (error != cudaSuccess) {
+  if (error != hipSuccess) {
     return error;
   }
 

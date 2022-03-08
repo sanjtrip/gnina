@@ -9,9 +9,10 @@ if(POLICY CMP0022)
   cmake_policy(SET CMP0022 NEW)
 endif()
 
-if(POLICY CMP0104)
-  cmake_policy(SET CMP0104 OLD) #TODO: clean up Cuda.cmake to be modern to avoid this workaround
-endif()
+# Sanjay
+#if(POLICY CMP0104)
+#  cmake_policy(SET CMP0104 OLD) #TODO: clean up Cuda.cmake to be modern to avoid this workaround
+#endif()
 
 # ---[ Caffe project
 project(Caffe C CXX)
@@ -34,9 +35,11 @@ include(cmake/Summary.cmake)
 include(cmake/ConfigGen.cmake)
 
 # ---[ Options
-caffe_option(CPU_ONLY  "Build Caffe without CUDA support" OFF) # TODO: rename to USE_CUDA
-caffe_option(USE_CUDNN "Build Caffe with cuDNN library support" ON IF NOT CPU_ONLY)
-caffe_option(USE_NCCL "Build Caffe with NCCL library support" OFF)
+# Sanjay
+#caffe_option(CPU_ONLY  "Build Caffe without CUDA support" OFF) # TODO: rename to USE_CUDA
+#caffe_option(USE_CUDNN "Build Caffe with cuDNN library support" ON IF NOT CPU_ONLY)
+#caffe_option(USE_NCCL "Build Caffe with NCCL library support" OFF)
+#caffe_option(USE_ROCM "Build Caffe with ROCm library support" ON)
 caffe_option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 caffe_option(BUILD_python "Build Python wrapper" ON)
 set(python_version "3" CACHE STRING "Specify which Python version to use")
@@ -51,7 +54,11 @@ include(cmake/Dependencies.cmake)
 
 # ---[ Flags
 if(UNIX OR APPLE)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -Wall")
+# Sanjay
+# -isystem /opt/rocm-4.3.0/llvm/lib/clang/12.0.0/include/.. -isystem /opt/rocm-4.3.0/hsa/include -D__HIP_ROCclr__ -isystem /opt/rocm-4.3.0/hip/include
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unknown-pragmas  -Wno-unused-command-line-argument
+# -D__HIP_DEVICE_COMPILE__ -D__HIP_PLATFORM_HCC__ -D__HIP_ROCclr__ -std=c++17 ")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -Wall ")
 endif()
 
 caffe_set_caffe_link()
@@ -62,7 +69,8 @@ if(USE_libstdcpp)
 endif()
 
 # ---[ Warnings
-caffe_warnings_disable(CMAKE_CXX_FLAGS -Wno-sign-compare -Wno-uninitialized)
+# Sanjay
+#caffe_warnings_disable(CMAKE_CXX_FLAGS -Wno-sign-compare -Wno-uninitialized)
 
 # ---[ Config generation
 configure_file(cmake/Templates/caffe_config.h.in "${PROJECT_BINARY_DIR}/caffe_config.h")
@@ -87,6 +95,15 @@ if(HAVE_CUDA)
   set(Caffe_ALL_DEFINITIONS ${Caffe_DEFINITIONS})
   list(REMOVE_ITEM Caffe_ALL_DEFINITIONS PRIVATE PUBLIC)
   list(APPEND CUDA_NVCC_FLAGS ${Caffe_ALL_DEFINITIONS})
+endif()
+
+# Sanjay
+if (DEFINED USE_ROCM)
+  include( ROCMSetupVersion )
+  include( ROCMCreatePackage )
+  include( ROCMInstallTargets )
+  include( ROCMPackageConfigHelpers )
+  include( ROCMInstallSymlinks )
 endif()
 
 # ---[ Subdirectories

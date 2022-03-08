@@ -13,7 +13,7 @@
 namespace caffe {
 
 #ifndef CPU_ONLY
-extern cudaDeviceProp CAFFE_TEST_CUDA_PROP;
+extern hipDeviceProp_t CAFFE_TEST_CUDA_PROP;
 #endif
 
 template <typename TypeParam>

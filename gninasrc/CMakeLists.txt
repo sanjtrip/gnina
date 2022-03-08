@@ -5,34 +5,44 @@ find_package(Boost REQUIRED COMPONENTS program_options system iostreams timer
     thread serialization filesystem date_time regex unit_test_framework)
 find_package(OpenMP)
 
-if("${CMAKE_BUILD_TYPE}" STREQUAL "Release" OR "${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
-  list(APPEND CUDA_NVCC_FLAGS -O3 --default-stream per-thread -Xptxas -dlcm=ca)
-elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-  list(APPEND CUDA_NVCC_FLAGS -O0 -G --default-stream per-thread)
-endif()
+# Sanjay
+if (DEFINED USE_ROCM)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -isystem /opt/rocm-5.0.0/llvm/lib/clang/12.0.0/include/..")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -isystem /opt/rocm-5.0.0/hsa/include -D__HIP_ROCclr__ -isystem /opt/rocm-5.0.0/hip/include")
+else()
+	if("${CMAKE_BUILD_TYPE}" STREQUAL "Release" OR "${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
+	  list(APPEND CUDA_NVCC_FLAGS -O3 --default-stream per-thread -Xptxas -dlcm=ca)
+	elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+	  list(APPEND CUDA_NVCC_FLAGS -O0 -G --default-stream per-thread)
+	endif()
 
-if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug" OR "${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
-  list(APPEND CUDA_NVCC_FLAGS -g)
-endif()
+	if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug" OR "${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
+	  list(APPEND CUDA_NVCC_FLAGS -g)
+	endif()
 
-if("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
-  list(APPEND CUDA_NVCC_FLAGS -lineinfo)
+	if("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
+	  list(APPEND CUDA_NVCC_FLAGS -lineinfo)
+	endif()
 endif()
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-include_directories(${Boost_INCLUDE_DIRS}) 
-include_directories(${CUDA_INCLUDE_DIRS})
+include_directories(${Boost_INCLUDE_DIRS})
+
+# Sanjay
+#include_directories(${CUDA_INCLUDE_DIRS})
+
 # need to use eigen 3.2 until CUDA fixes are released
 include_directories(../Eigen)
 
+# Sanjay
 #lib
 set(LIB_SRCS
 ${CMAKE_CURRENT_BINARY_DIR}/version.cpp
 lib/atom_constants.cpp
-lib/bfgs.cu
+lib/bfgs.hip.cpp
 lib/box.cpp
 lib/builtinscoring.cpp
 lib/cache.cpp
@@ -46,7 +56,7 @@ lib/everything.cpp
 lib/flexinfo.cpp
 lib/GninaConverter.cpp
 lib/grid.cpp
-lib/grid_gpu.cu
+lib/grid_gpu.cu.cpp
 lib/model.cpp
 lib/molgetter.cpp
 lib/monte_carlo.cpp
@@ -62,7 +72,7 @@ lib/parse_pdbqt.cpp
 lib/pdb.cpp
 lib/PDBQTUtilities.cpp
 lib/quasi_newton.cpp
-lib/quaternion.cu
+lib/quaternion.cu.cpp
 lib/random.cpp
 lib/result_info.cpp
 lib/ssd.cpp
@@ -70,18 +80,19 @@ lib/szv_grid.cpp
 lib/terms.cpp
 lib/weighted_terms.cpp
 lib/conf.cpp
-lib/conf_gpu.cu
-lib/gpucode.cu
-lib/model.cu
-lib/non_cache_gpu.cu
-lib/precalculate_gpu.cu
-lib/tree_gpu.cu
+lib/conf_gpu.hip.cpp
+lib/non_cache_gpu.hip.cpp
+lib/precalculate_gpu.hip.cpp
 lib/user_opts.cpp
+lib/gpucode.hip.cpp
+lib/model.hip.cpp
+lib/tree_gpu.hip.cpp
 )
 
 
 #grid member functions need to be called by arbitrary kernels
-set_source_files_properties(lib/grid_gpu.cu PROPERTIES COMPILE_FLAGS -maxrregcount=64)
+# Sanjay
+#set_source_files_properties(lib/grid_gpu.cu.cpp PROPERTIES COMPILE_FLAGS -maxrregcount=64)
 
 #test
 file(GLOB TEST_SRCS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} test/*.c*)
@@ -129,7 +140,12 @@ add_executable(fromgnina fromgnina/fromgnina.cpp lib/CommandLine2/CommandLine.cp
 target_link_libraries(fromgnina  gninalib )
 
 add_executable(gninagrid gninagrid/gninagrid.cpp gninagrid/molgridder.cpp lib/CommandLine2/CommandLine.cpp)
-target_link_libraries(gninagrid  gninalib  ${CUDA_LIBRARIES})
+# Sanjay
+if (DEFINED USE_ROCM)
+    target_link_libraries(gninagrid  gninalib })
+else()
+    target_link_libraries(gninagrid  gninalib  ${CUDA_LIBRARIES})
+endif()
 
 add_executable(gninatyper gninatyper/gninatyper.cpp lib/CommandLine2/CommandLine.cpp ${LIB_SRCS})
 target_link_libraries(gninatyper   ${Caffe_LINK}  ${Boost_LIBRARIES} ${OpenBabel3_LIBRARIES} ${LIBMOLGRID_LIBRARY})

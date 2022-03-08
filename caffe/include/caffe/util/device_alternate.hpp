@@ -31,12 +31,12 @@ void classname<Dtype>::funcname##_##gpu(const vector<Blob<Dtype>*>& top, \
 
 #else  // Normal GPU + CPU Caffe.
 
-#include <cublas_v2.h>
-#include <cuda.h>
-#include <cuda_runtime.h>
-#include <curand.h>
+#include <hipblas.h>
+#include <hip/hip_runtime.h>
+#include <hip/hip_runtime.h>
+#include <hiprand.h>
 #include <stdexcept>
-#include <driver_types.h>  // cuda driver types
+#include <hip/driver_types.h>  // cuda driver types
 #ifdef USE_CUDNN  // cuDNN acceleration library.
 #include "caffe/util/cudnn.hpp"
 #endif
@@ -47,23 +47,23 @@ void classname<Dtype>::funcname##_##gpu(const vector<Blob<Dtype>*>& top, \
 
 // CUDA: various checks for different function calls.
 #define CUDA_CHECK(condition) \
-  /* Code block avoids redefinition of cudaError_t error */ \
+  /* Code block avoids redefinition of hipError_t error */ \
   do { \
-    cudaError_t error = condition; \
-    if(error != cudaSuccess) throw std::runtime_error(cudaGetErrorString(error)); \
+    hipError_t error = condition; \
+    if(error != hipSuccess) throw std::runtime_error(hipGetErrorString(error)); \
   } while (0)
 
 #define CUBLAS_CHECK(condition) \
   do { \
-    cublasStatus_t status = condition; \
-    CHECK_EQ(status, CUBLAS_STATUS_SUCCESS) << " " \
+    hipblasStatus_t status = condition; \
+    CHECK_EQ(status, HIPBLAS_STATUS_SUCCESS) << " " \
       << caffe::cublasGetErrorString(status); \
   } while (0)
 
 #define CURAND_CHECK(condition) \
   do { \
-    curandStatus_t status = condition; \
-    CHECK_EQ(status, CURAND_STATUS_SUCCESS) << " " \
+    hiprandStatus_t status = condition; \
+    CHECK_EQ(status, HIPRAND_STATUS_SUCCESS) << " " \
       << caffe::curandGetErrorString(status); \
   } while (0)
 
@@ -74,13 +74,13 @@ void classname<Dtype>::funcname##_##gpu(const vector<Blob<Dtype>*>& top, \
        i += blockDim.x * gridDim.x)
 
 // CUDA: check for error after kernel execution and exit loudly if there is one.
-#define CUDA_POST_KERNEL_CHECK CUDA_CHECK(cudaPeekAtLastError())
+#define CUDA_POST_KERNEL_CHECK CUDA_CHECK(hipPeekAtLastError())
 
 namespace caffe {
 
 // CUDA: library error reporting.
-const char* cublasGetErrorString(cublasStatus_t error);
-const char* curandGetErrorString(curandStatus_t error);
+const char* cublasGetErrorString(hipblasStatus_t error);
+const char* curandGetErrorString(hiprandStatus_t error);
 
 // CUDA: use 512 threads per block
 const int CAFFE_CUDA_NUM_THREADS = 512;

@@ -3,7 +3,7 @@
 #include <float.h>
 #include "array3d.h"
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include "device_buffer.h"
 #include <random>
 
@@ -71,7 +71,7 @@ inline std::ostream& operator<<(std::ostream& os, const gfloat3& f) {
 //work by applying hardware operations separately to individual elements of the
 //respective types.
 
-#ifdef __CUDACC__
+#ifdef __HIPCC__
 
 __device__ __inline__ float shuffle_down(float val, int offset) {
   //wrapper for sync for normal flaot type
@@ -163,8 +163,9 @@ __host__  __device__  inline static gfloat3 operator-(const gfloat3 &a,
   return gfloat3(a.x - b.x, a.y - b.y, a.z - b.z);
 }
 
+// ROCm-Port
 __host__  __device__  inline static gfloat3 operator+=(gfloat3 &a,
-    const gfloat3 &b) {
+    gfloat3 &b) {
   return a = a + b;
 }
 
@@ -192,7 +193,7 @@ class array3d_gpu {
         : i(carr.m_i), j(carr.m_j), k(carr.m_k) {
       CUDA_CHECK_GNINA(thread_buffer.alloc(&data, i * j * k * sizeof(T)));
       definitelyPinnedMemcpy(data, &carr.m_data[0],
-          sizeof(T) * carr.m_data.size(), cudaMemcpyHostToDevice);
+          sizeof(T) * carr.m_data.size(), hipMemcpyHostToDevice);
     }
 
     __device__ sz dim0() const {

@@ -12,14 +12,14 @@
 namespace caffe {
 
 // If CUDA is available and in GPU mode, host memory will be allocated pinned,
-// using cudaMallocHost. It avoids dynamic pinning for transfers (DMA).
+// using hipMallocHost. It avoids dynamic pinning for transfers (DMA).
 // The improvement in performance seems negligible in the single GPU case,
 // but might be more significant for parallel training. Most importantly,
 // it improved stability for large models on many GPUs.
 inline void CaffeMallocHost(void** ptr, size_t size, bool* use_cuda) {
 #ifndef CPU_ONLY
   if (Caffe::mode() == Caffe::GPU) {
-    CUDA_CHECK(cudaMallocHost(ptr, size));
+    CUDA_CHECK(hipMallocHost(ptr, size));
     *use_cuda = true;
     return;
   }
@@ -36,7 +36,7 @@ inline void CaffeMallocHost(void** ptr, size_t size, bool* use_cuda) {
 inline void CaffeFreeHost(void* ptr, bool use_cuda) {
 #ifndef CPU_ONLY
   if (use_cuda) {
-    CUDA_CHECK(cudaFreeHost(ptr));
+    CUDA_CHECK(hipHostFree(ptr));
     return;
   }
 #endif
@@ -71,7 +71,7 @@ class SyncedMemory {
   void clear();
 
 #ifndef CPU_ONLY
-  void async_gpu_push(const cudaStream_t& stream);
+  void async_gpu_push(const hipStream_t& stream);
 #endif
 
  private:

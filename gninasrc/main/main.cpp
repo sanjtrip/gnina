@@ -60,7 +60,7 @@
 #include "user_opts.h"
 #include "version.h"
 
-#include <cuda_profiler_api.h>
+#include <hip/hip_profile.h>
 
 using namespace boost::iostreams;
 using boost::filesystem::path;
@@ -1354,8 +1354,8 @@ Thank you!\n";
     }
 
     //check for GPU
-    int cudaerror = cudaDeviceReset();
-    if(cudaerror != cudaSuccess) {
+    int cudaerror = hipDeviceReset();
+    if(cudaerror != hipSuccess) {
       caffe::Caffe::set_cudnn(false); //if cudnn is on, won't fallback to cpu
     } else if(settings.no_gpu) {
       caffe::Caffe::set_cudnn(false);
@@ -1453,7 +1453,7 @@ Thank you!\n";
     //output banner
     log << cite_message << '\n';
 
-    if(cudaerror != cudaSuccess) {
+    if(cudaerror != hipSuccess) {
       log << "WARNING: No GPU detected. CNN scoring will be slow.\n"
           "Recommend running with single model (--cnn crossdock_default2018)\n"
           "or without cnn scoring (--cnn_scoring=none).\n\n";
@@ -1712,7 +1712,7 @@ Thank you!\n";
       worker_threads.join_all();
       writerq.close(1);
       writer_thread.join();
-      cudaDeviceSynchronize();
+      hipDeviceSynchronize();
       throw;
     }
 
@@ -1723,14 +1723,14 @@ Thank you!\n";
     writer_thread.join();
 
     sz free_byte = 0, total_byte = 0;
-    if(settings.verbosity > 1 && cudaMemGetInfo( &free_byte, &total_byte ) == cudaSuccess) {
+    if(settings.verbosity > 1 && hipMemGetInfo( &free_byte, &total_byte ) == hipSuccess) {
       double free_db = (double)free_byte ;
       double total_db = (double)total_byte ;
       double used_db = total_db - free_db ;
       log << "GPU memory usage: " << int(used_db/1024.0/1024.0) << " MB" << "\n";
     }
 
-    cudaDeviceSynchronize();
+    hipDeviceSynchronize();
 
     //std::cout << "Loop time " << time.elapsed().wall / 1000000000.0 << "\n";
 
@@ -1766,7 +1766,7 @@ Thank you!\n";
     std::cerr << "\nRuntime Error\n";
     std::cerr << e.what() << "\n";
     sz free_byte = 0, total_byte = 0;
-    cudaMemGetInfo( &free_byte, &total_byte ) ;
+    hipMemGetInfo( &free_byte, &total_byte ) ;
 
     double free_db = (double)free_byte ;
     double total_db = (double)total_byte ;

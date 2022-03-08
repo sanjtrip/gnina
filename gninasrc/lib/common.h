@@ -28,7 +28,7 @@
 #include <limits>
 #include <utility> // pair#include <algorithm> // too common#include <vector> // used in typedef, and commonly used overall#include <cmath> // commonly used#include <iostream> // various debugging everywhere#include <fstream> // print_coords#include <iomanip> // to_string#include <sstream> // to_string#include <string> // probably included by the above anyway, common anyway#include <boost/serialization/vector.hpp> // can't come before the above two - wart fixed in upcoming Boost versions#include <boost/serialization/base_object.hpp> // movable_atom needs it - (derived from atom)#include <boost/filesystem/path.hpp> // typedef'ed#include "macros.h"
 #include "math.h"
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
 typedef float fl;
 
@@ -79,7 +79,7 @@ typedef std::pair<fl, fl> pr;
 
 // TODO: remove alignment. Exists so that vec operations in tree_gpu.cu can
 // coalesce reads and writes.
-#if defined(__CUDACC__)
+#if defined(__HIPCC__)
 #define CUDA_ALIGN(n) __align__(n)
 #else
 #define CUDA_ALIGN(n) alignas(n)
@@ -126,14 +126,20 @@ struct CUDA_ALIGN(4 * sizeof(float)) vec {
     __host__ __device__ fl y() const { return data[1]; }
     __host__ __device__ fl z() const { return data[2]; }
 
-#ifndef __CUDA_ARCH__
-    fl norm() const {
-      return std::sqrt(norm_sqr());
+    // Sanjay
+#ifdef __HIP_PLATFORM_HCC__
+    __host__  __device__
+    float norm() const {
+      return sqrtf(norm_sqr());
     }
-#else
+#elif __CUDA_ARCH__
     __device__
     float norm() const {
       return sqrtf(norm_sqr());
+    }
+#else
+    fl norm() const {
+      return std::sqrt(norm_sqr());
     }
 #endif
     __host__   __device__ fl operator*(const vec& v) const {
@@ -333,17 +339,26 @@ inline sz fl_to_sz(fl x, sz max_sz) { // return a value in [0, max_sz]
 
 const fl fl_tolerance = fl(0.001);
 
-#ifndef __CUDA_ARCH__
-__host__ inline bool eq(fl a, fl b) {
-  return std::abs(a - b) < fl_tolerance;
+// Sanjay
+#ifdef __HIP_PLATFORM_HCC__
+__host__  __device__ inline bool eq(float a, float b) {
+  return fabsf(a - b) < fl_tolerance;
 }
-#else
+
+__host__  __device__ inline bool eq(double a, double b) {
+  return fabs(a - b) < fl_tolerance;
+}
+#elif __CUDA_ARCH__
 __device__ inline bool eq(float a, float b) {
   return fabsf(a - b) < fl_tolerance;
 }
 
 __device__ inline bool eq(double a, double b) {
   return fabs(a - b) < fl_tolerance;
+}
+#else
+__host__ inline bool eq(fl a, fl b) {
+  return std::abs(a - b) < fl_tolerance;
 }
 #endif
 
@@ -386,7 +401,48 @@ sz find_min(const std::vector<T>& v) { // returns v.size() i.e. 0 for empty vect
   return tmp;
 }
 
-#ifndef __CUDA_ARCH__
+// Sanjay
+#ifdef __HIP_PLATFORM_HCC__
+__host__  __device__ inline void normalize_angle(fl& x) {
+  if (x > 3 * pi) {
+    fl n = (x - pi) / (2 * pi);
+    x -= 2 * pi * ceilf(n);
+    normalize_angle(x);
+  } else
+    if (x < -3 * pi) {
+      fl n = (-x - pi) / (2 * pi);
+      x += 2 * pi * ceilf(n);
+      normalize_angle(x);
+    } else
+      if (x > pi) {
+        x -= 2 * pi;
+      } else
+        if (x < -pi) {
+          x += 2 * pi;
+        }
+  //TODO: put the assert back?
+}
+#elif __CUDA_ARCH__
+__device__ inline void normalize_angle(fl& x) {
+  if (x > 3 * pi) {
+    fl n = (x - pi) / (2 * pi);
+    x -= 2 * pi * ceilf(n);
+    normalize_angle(x);
+  } else
+    if (x < -3 * pi) {
+      fl n = (-x - pi) / (2 * pi);
+      x += 2 * pi * ceilf(n);
+      normalize_angle(x);
+    } else
+      if (x > pi) {
+        x -= 2 * pi;
+      } else
+        if (x < -pi) {
+          x += 2 * pi;
+        }
+  //TODO: put the assert back?
+}
+#else
 __host__ inline void normalize_angle(fl& x) { // subtract or add enough 2*pi's to make x be in [-pi, pi]
   if (x > 3*pi) { // very large
     fl n = ( x - pi) / (2*pi);// how many 2*pi's do you want to subtract?
@@ -406,26 +462,6 @@ __host__ inline void normalize_angle(fl& x) { // subtract or add enough 2*pi's t
   }
   assert((x >= -pi && x <= pi) || !(std::cerr << "x=" << x << "\n"));
   // in [-pi, pi]
-}
-#else
-__device__ inline void normalize_angle(fl& x) {
-  if (x > 3 * pi) {
-    fl n = (x - pi) / (2 * pi);
-    x -= 2 * pi * ceilf(n);
-    normalize_angle(x);
-  } else
-    if (x < -3 * pi) {
-      fl n = (-x - pi) / (2 * pi);
-      x += 2 * pi * ceilf(n);
-      normalize_angle(x);
-    } else
-      if (x > pi) {
-        x -= 2 * pi;
-      } else
-        if (x < -pi) {
-          x += 2 * pi;
-        }
-  //TODO: put the assert back?
 }
 #endif
 

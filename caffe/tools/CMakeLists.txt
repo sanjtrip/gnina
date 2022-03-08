@@ -12,7 +12,12 @@ foreach(source ${srcs})
 
   # target
   add_executable(${name} ${source})
+# Sanjay
+if (DEFINED USE_ROCM)
+  target_link_libraries(${name} ${Caffe_LINK} ${LIBMOLGRID_LIBRARY})
+else()
   target_link_libraries(${name} ${Caffe_LINK} ${CUDA_LIBRARIES} ${LIBMOLGRID_LIBRARY})
+endif()
   caffe_default_properties(${name})
 
   # set back RUNTIME_OUTPUT_DIRECTORY

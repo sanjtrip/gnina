@@ -19,13 +19,13 @@ void CuDNNDeconvolutionLayer<Dtype>::LayerSetUp(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
   DeconvolutionLayer<Dtype>::LayerSetUp(bottom, top);
   // Initialize CUDA streams and cuDNN.
-  stream_         = new cudaStream_t[this->group_ * CUDNN_STREAMS_PER_GROUP];
-  handle_         = new cudnnHandle_t[this->group_ * CUDNN_STREAMS_PER_GROUP];
+  stream_         = new hipStream_t[this->group_ * CUDNN_STREAMS_PER_GROUP];
+  handle_         = new hipdnnHandle_t[this->group_ * CUDNN_STREAMS_PER_GROUP];
 
   // Initialize algorithm arrays
-  fwd_algo_       = new cudnnConvolutionFwdAlgo_t[bottom.size()];
-  bwd_filter_algo_= new cudnnConvolutionBwdFilterAlgo_t[bottom.size()];
-  bwd_data_algo_  = new cudnnConvolutionBwdDataAlgo_t[bottom.size()];
+  fwd_algo_       = new hipdnnConvolutionFwdAlgo_t[bottom.size()];
+  bwd_filter_algo_= new hipdnnConvolutionBwdFilterAlgo_t[bottom.size()];
+  bwd_data_algo_  = new hipdnnConvolutionBwdDataAlgo_t[bottom.size()];
 
   // initialize size arrays
   workspace_fwd_sizes_ = new size_t[bottom.size()];
@@ -39,9 +39,9 @@ void CuDNNDeconvolutionLayer<Dtype>::LayerSetUp(
 
   for (size_t i = 0; i < bottom.size(); ++i) {
     // initialize all to default algorithms
-    fwd_algo_[i] = (cudnnConvolutionFwdAlgo_t)0;
-    bwd_filter_algo_[i] = (cudnnConvolutionBwdFilterAlgo_t)0;
-    bwd_data_algo_[i] = (cudnnConvolutionBwdDataAlgo_t)0;
+    fwd_algo_[i] = (hipdnnConvolutionFwdAlgo_t)0;
+    bwd_filter_algo_[i] = (hipdnnConvolutionBwdFilterAlgo_t)0;
+    bwd_data_algo_[i] = (hipdnnConvolutionBwdDataAlgo_t)0;
     // default algorithms don't require workspace
     workspace_fwd_sizes_[i] = 0;
     workspace_bwd_data_sizes_[i] = 0;
@@ -49,9 +49,9 @@ void CuDNNDeconvolutionLayer<Dtype>::LayerSetUp(
   }
 
   for (int g = 0; g < this->group_ * CUDNN_STREAMS_PER_GROUP; g++) {
-    CUDA_CHECK(cudaStreamCreate(&stream_[g]));
-    CUDNN_CHECK(cudnnCreate(&handle_[g]));
-    CUDNN_CHECK(cudnnSetStream(handle_[g], stream_[g]));
+    CUDA_CHECK(hipStreamCreate(&stream_[g]));
+    CUDNN_CHECK(hipdnnCreate(&handle_[g]));
+    CUDNN_CHECK(hipdnnSetStream(handle_[g], stream_[g]));
     workspace[g] = NULL;
   }
 
@@ -69,13 +69,13 @@ void CuDNNDeconvolutionLayer<Dtype>::LayerSetUp(
 
   // Create tensor descriptor(s) for data and corresponding convolution(s).
   for (int i = 0; i < bottom.size(); i++) {
-    cudnnTensorDescriptor_t bottom_desc;
+    hipdnnTensorDescriptor_t bottom_desc;
     cudnn::createTensorDesc<Dtype>(&bottom_desc);
     bottom_descs_.push_back(bottom_desc);
-    cudnnTensorDescriptor_t top_desc;
+    hipdnnTensorDescriptor_t top_desc;
     cudnn::createTensorDesc<Dtype>(&top_desc);
     top_descs_.push_back(top_desc);
-    cudnnConvolutionDescriptor_t conv_desc;
+    hipdnnConvolutionDescriptor_t conv_desc;
     cudnn::createConvolutionDesc<Dtype>(&conv_desc);
     conv_descs_.push_back(conv_desc);
   }
@@ -113,39 +113,39 @@ void CuDNNDeconvolutionLayer<Dtype>::Reshape(
                                      pad, stride);
 
     // choose forward and backward algorithms + workspace(s)
-    CUDNN_CHECK(cudnnGetConvolutionForwardAlgorithm(
+    CUDNN_CHECK(hipdnnGetConvolutionForwardAlgorithm(
         handle_[0],
         top_descs_[i],
         filter_desc_,
         conv_descs_[i],
         bottom_descs_[i],
-        CUDNN_CONVOLUTION_FWD_SPECIFY_WORKSPACE_LIMIT,
+        HIPDNN_CONVOLUTION_FWD_SPECIFY_WORKSPACE_LIMIT,
         workspace_limit_bytes,
         &fwd_algo_[i]));
 
-    // We have found that CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM is
+    // We have found that HIPDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM is
     // buggy. Thus, if this algo was chosen, choose winograd instead. If
     // winograd is not supported or workspace is larger than threshold, choose
     // implicit_gemm instead.
-    if (fwd_algo_[i] == CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM) {
+    if (fwd_algo_[i] == HIPDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM) {
       size_t winograd_workspace_size;
-      cudnnStatus_t status = cudnnGetConvolutionForwardWorkspaceSize(
+      hipdnnStatus_t status = hipdnnGetConvolutionForwardWorkspaceSize(
           handle_[0],
           top_descs_[i],
           filter_desc_,
           conv_descs_[i],
           bottom_descs_[i],
-          CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD,
+          HIPDNN_CONVOLUTION_FWD_ALGO_WINOGRAD,
           &winograd_workspace_size);
-      if (status != CUDNN_STATUS_SUCCESS ||
+      if (status != HIPDNN_STATUS_SUCCESS ||
           winograd_workspace_size >= workspace_limit_bytes) {
-        fwd_algo_[i] = CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM;
+        fwd_algo_[i] = HIPDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM;
       } else {
-        fwd_algo_[i] = CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD;
+        fwd_algo_[i] = HIPDNN_CONVOLUTION_FWD_ALGO_WINOGRAD;
       }
     }
 
-    CUDNN_CHECK(cudnnGetConvolutionForwardWorkspaceSize(
+    CUDNN_CHECK(hipdnnGetConvolutionForwardWorkspaceSize(
         handle_[0],
         top_descs_[i],
         filter_desc_,
@@ -155,18 +155,18 @@ void CuDNNDeconvolutionLayer<Dtype>::Reshape(
         &(workspace_fwd_sizes_[i])));
 
     // choose backward algorithm for filter
-    CUDNN_CHECK(cudnnGetConvolutionBackwardFilterAlgorithm(
+    CUDNN_CHECK(hipdnnGetConvolutionBackwardFilterAlgorithm(
         handle_[0],
         top_descs_[i],
         bottom_descs_[i],
         conv_descs_[i],
         filter_desc_,
-        CUDNN_CONVOLUTION_BWD_FILTER_SPECIFY_WORKSPACE_LIMIT,
+        HIPDNN_CONVOLUTION_BWD_FILTER_SPECIFY_WORKSPACE_LIMIT,
         workspace_limit_bytes,
         &bwd_filter_algo_[i]));
 
     // get workspace for backwards filter algorithm
-    CUDNN_CHECK(cudnnGetConvolutionBackwardFilterWorkspaceSize(
+    CUDNN_CHECK(hipdnnGetConvolutionBackwardFilterWorkspaceSize(
         handle_[0],
         top_descs_[i],
         bottom_descs_[i],
@@ -176,18 +176,18 @@ void CuDNNDeconvolutionLayer<Dtype>::Reshape(
         &workspace_bwd_filter_sizes_[i]));
 
     // choose backward algo for data
-    CUDNN_CHECK(cudnnGetConvolutionBackwardDataAlgorithm(
+    CUDNN_CHECK(hipdnnGetConvolutionBackwardDataAlgorithm(
         handle_[0],
         filter_desc_,
         bottom_descs_[i],
         conv_descs_[i],
         top_descs_[i],
-        CUDNN_CONVOLUTION_BWD_DATA_SPECIFY_WORKSPACE_LIMIT,
+        HIPDNN_CONVOLUTION_BWD_DATA_SPECIFY_WORKSPACE_LIMIT,
         workspace_limit_bytes,
         &bwd_data_algo_[i]));
 
     // get workspace size
-    CUDNN_CHECK(cudnnGetConvolutionBackwardDataWorkspaceSize(
+    CUDNN_CHECK(hipdnnGetConvolutionBackwardDataWorkspaceSize(
         handle_[0],
         filter_desc_,
         bottom_descs_[i],
@@ -224,18 +224,18 @@ void CuDNNDeconvolutionLayer<Dtype>::Reshape(
     workspaceSizeInBytes = total_max_workspace;
 
     // free the existing workspace and allocate a new (larger) one
-    cudaFree(this->workspaceData);
+    hipFree(this->workspaceData);
 
-    cudaError_t err = cudaMalloc(&(this->workspaceData), workspaceSizeInBytes);
-    if (err != cudaSuccess) {
+    hipError_t err = hipMalloc(&(this->workspaceData), workspaceSizeInBytes);
+    if (err != hipSuccess) {
       // force zero memory path
       for (int i = 0; i < bottom.size(); i++) {
         workspace_fwd_sizes_[i] = 0;
         workspace_bwd_filter_sizes_[i] = 0;
         workspace_bwd_data_sizes_[i] = 0;
-        fwd_algo_[i] = CUDNN_CONVOLUTION_FWD_ALGO_FFT_TILING;
-        bwd_filter_algo_[i] = CUDNN_CONVOLUTION_BWD_FILTER_ALGO_0;
-        bwd_data_algo_[i] = CUDNN_CONVOLUTION_BWD_DATA_ALGO_0;
+        fwd_algo_[i] = HIPDNN_CONVOLUTION_FWD_ALGO_FFT_TILING;
+        bwd_filter_algo_[i] = HIPDNN_CONVOLUTION_BWD_FILTER_ALGO_0;
+        bwd_data_algo_[i] = HIPDNN_CONVOLUTION_BWD_DATA_ALGO_0;
       }
 
       // NULL out all workspace pointers
@@ -271,21 +271,21 @@ CuDNNDeconvolutionLayer<Dtype>::~CuDNNDeconvolutionLayer() {
   if (!handles_setup_) { return; }
 
   for (int i = 0; i < bottom_descs_.size(); i++) {
-    cudnnDestroyTensorDescriptor(bottom_descs_[i]);
-    cudnnDestroyTensorDescriptor(top_descs_[i]);
-    cudnnDestroyConvolutionDescriptor(conv_descs_[i]);
+    hipdnnDestroyTensorDescriptor(bottom_descs_[i]);
+    hipdnnDestroyTensorDescriptor(top_descs_[i]);
+    hipdnnDestroyConvolutionDescriptor(conv_descs_[i]);
   }
   if (this->bias_term_) {
-    cudnnDestroyTensorDescriptor(bias_desc_);
+    hipdnnDestroyTensorDescriptor(bias_desc_);
   }
-  cudnnDestroyFilterDescriptor(filter_desc_);
+  hipdnnDestroyFilterDescriptor(filter_desc_);
 
   for (int g = 0; g < this->group_ * CUDNN_STREAMS_PER_GROUP; g++) {
-    cudaStreamDestroy(stream_[g]);
-    cudnnDestroy(handle_[g]);
+    hipStreamDestroy(stream_[g]);
+    hipdnnDestroy(handle_[g]);
   }
 
-  cudaFree(workspaceData);
+  hipFree(workspaceData);
   delete [] workspace;
   delete [] stream_;
   delete [] handle_;

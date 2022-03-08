@@ -90,7 +90,7 @@ static void get_gpus(vector<int>* gpus) {
   if (FLAGS_gpu == "all") {
     int count = 0;
 #ifndef CPU_ONLY
-    CUDA_CHECK(cudaGetDeviceCount(&count));
+    CUDA_CHECK(hipGetDeviceCount(&count));
 #else
     NO_GPU;
 #endif
@@ -188,7 +188,7 @@ int train() {
               boost::lexical_cast<string>(solver_param.device_id());
       } else {  // Set default GPU if unspecified
 	  int device = -1;
-	  cudaGetDevice(&device);
+	  hipGetDevice(&device);
 	  if(device >= 0)
           	FLAGS_gpu = "" + boost::lexical_cast<string>(device);
       }
@@ -206,9 +206,9 @@ int train() {
     }
     LOG(INFO) << "Using GPUs " << s.str();
 #ifndef CPU_ONLY
-    cudaDeviceProp device_prop;
+    hipDeviceProp_t device_prop;
     for (int i = 0; i < gpus.size(); ++i) {
-      cudaGetDeviceProperties(&device_prop, gpus[i]);
+      hipGetDeviceProperties(&device_prop, gpus[i]);
       LOG(INFO) << "GPU " << gpus[i] << ": " << device_prop.name;
     }
 #endif
@@ -268,8 +268,8 @@ int test() {
   if (gpus.size() != 0) {
     LOG(INFO) << "Use GPU with device ID " << gpus[0];
 #ifndef CPU_ONLY
-    cudaDeviceProp device_prop;
-    cudaGetDeviceProperties(&device_prop, gpus[0]);
+    hipDeviceProp_t device_prop;
+    hipGetDeviceProperties(&device_prop, gpus[0]);
     LOG(INFO) << "GPU device name: " << device_prop.name;
 #endif
     Caffe::SetDevice(gpus[0]);

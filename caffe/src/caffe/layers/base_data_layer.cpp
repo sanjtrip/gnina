@@ -51,7 +51,7 @@ void BasePrefetchingDataLayer<Dtype>::LayerSetUp(
 
   // Before starting the prefetch thread, we make cpu_data and gpu_data
   // calls so that the prefetch thread does not accidentally make simultaneous
-  // cudaMalloc calls when the main thread is running. In some GPUs this
+  // hipMalloc calls when the main thread is running. In some GPUs this
   // seems to cause failures if we do not so.
   for (int i = 0; i < prefetch_.size(); ++i) {
     prefetch_[i]->data_.mutable_cpu_data();
@@ -78,9 +78,9 @@ void BasePrefetchingDataLayer<Dtype>::LayerSetUp(
 template <typename Dtype>
 void BasePrefetchingDataLayer<Dtype>::InternalThreadEntry() {
 #ifndef CPU_ONLY
-  cudaStream_t stream;
+  hipStream_t stream;
   if (Caffe::mode() == Caffe::GPU) {
-    CUDA_CHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+    CUDA_CHECK(hipStreamCreateWithFlags(&stream, hipStreamNonBlocking));
   }
 #endif
 
@@ -94,7 +94,7 @@ void BasePrefetchingDataLayer<Dtype>::InternalThreadEntry() {
         if (this->output_labels_) {
           batch->label_.data().get()->async_gpu_push(stream);
         }
-        CUDA_CHECK(cudaStreamSynchronize(stream));
+        CUDA_CHECK(hipStreamSynchronize(stream));
       }
 #endif
       prefetch_full_.push(batch);
@@ -104,7 +104,7 @@ void BasePrefetchingDataLayer<Dtype>::InternalThreadEntry() {
   }
 #ifndef CPU_ONLY
   if (Caffe::mode() == Caffe::GPU) {
-    CUDA_CHECK(cudaStreamDestroy(stream));
+    CUDA_CHECK(hipStreamDestroy(stream));
   }
 #endif
 }

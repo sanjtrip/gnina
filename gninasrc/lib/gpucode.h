@@ -5,7 +5,7 @@
 #ifndef __GPUCODE_H
 #define __GPUCODE_H
 // CUDA runtime
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include <vector>
 #include "interacting_pairs.h"
 #include "grid_gpu.h"

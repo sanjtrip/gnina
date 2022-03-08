@@ -116,22 +116,22 @@ Caffe::Caffe()
   // Try to create a cublas handler, and report an error if failed (but we will
   // keep the program running as one might just want to run CPU code).
   // dkoes - we will report lack of GPU elsewhere
-  if (cublasCreate(&cublas_handle_) != CUBLAS_STATUS_SUCCESS) {
+  if (hipblasCreate(&cublas_handle_) != HIPBLAS_STATUS_SUCCESS) {
    // LOG(ERROR) << "Cannot create Cublas handle. Cublas won't be available.";
   }
-  // Try to create a curand handler.
-  if (curandCreateGenerator(&curand_generator_, CURAND_RNG_PSEUDO_DEFAULT)
-      != CURAND_STATUS_SUCCESS ||
-      curandSetPseudoRandomGeneratorSeed(curand_generator_, cluster_seedgen())
-      != CURAND_STATUS_SUCCESS) {
+  // Try to create a hiprand handler.
+  if (hiprandCreateGenerator(&curand_generator_, HIPRAND_RNG_PSEUDO_DEFAULT)
+      != HIPRAND_STATUS_SUCCESS ||
+      hiprandSetPseudoRandomGeneratorSeed(curand_generator_, cluster_seedgen())
+      != HIPRAND_STATUS_SUCCESS) {
    //LOG(ERROR) << "Cannot create Curand generator. Curand won't be available.";
   }
 }
 
 Caffe::~Caffe() {
-  if (cublas_handle_) CUBLAS_CHECK(cublasDestroy(cublas_handle_));
+  if (cublas_handle_) CUBLAS_CHECK(hipblasDestroy(cublas_handle_));
   if (curand_generator_) {
-    CURAND_CHECK(curandDestroyGenerator(curand_generator_));
+    CURAND_CHECK(hiprandDestroyGenerator(curand_generator_));
   }
 }
 
@@ -139,12 +139,12 @@ void Caffe::set_random_seed(const unsigned int seed) {
   // Curand seed
   static bool g_curand_availability_logged = false;
   if (Get().curand_generator_) {
-    CURAND_CHECK(curandSetPseudoRandomGeneratorSeed(curand_generator(),
+    CURAND_CHECK(hiprandSetPseudoRandomGeneratorSeed(curand_generator(),
         seed));
-    CURAND_CHECK(curandSetGeneratorOffset(curand_generator(), 0));
+    CURAND_CHECK(hiprandSetGeneratorOffset(curand_generator(), 0));
   } else {
     if (!g_curand_availability_logged) {
-        //LOG(ERROR) << "Curand not available. Skipping setting the curand seed.";
+        //LOG(ERROR) << "Curand not available. Skipping setting the hiprand seed.";
         g_curand_availability_logged = true;
     }
   }
@@ -156,37 +156,40 @@ void Caffe::set_random_seed(const unsigned int seed) {
 
 void Caffe::SetDevice(const int device_id) {
   int current_device;
-  CUDA_CHECK(cudaGetDevice(&current_device));
+  CUDA_CHECK(hipGetDevice(&current_device));
   if (current_device == device_id) {
     return;
   }
-  // The call to cudaSetDevice must come before any calls to Get, which
+  // The call to hipSetDevice must come before any calls to Get, which
   // may perform initialization using the GPU.
   if(device_id >= 0) {
-    CUDA_CHECK(cudaSetDevice(device_id));
-  } else {
+    CUDA_CHECK(hipSetDevice(device_id));
+  }
+  // Sanjay
+  // else {
     //negative means pick first avail
-    cudaSetValidDevices(NULL,0);
-  }
-  if (Get().cublas_handle_) CUBLAS_CHECK(cublasDestroy(Get().cublas_handle_));
+    //cudaSetValidDevices(NULL,0);
+  //}
+
+  if (Get().cublas_handle_) CUBLAS_CHECK(hipblasDestroy(Get().cublas_handle_));
   if (Get().curand_generator_) {
-    CURAND_CHECK(curandDestroyGenerator(Get().curand_generator_));
+    CURAND_CHECK(hiprandDestroyGenerator(Get().curand_generator_));
   }
-  CUBLAS_CHECK(cublasCreate(&Get().cublas_handle_));
-  CURAND_CHECK(curandCreateGenerator(&Get().curand_generator_,
-      CURAND_RNG_PSEUDO_DEFAULT));
-  CURAND_CHECK(curandSetPseudoRandomGeneratorSeed(Get().curand_generator_,
+  CUBLAS_CHECK(hipblasCreate(&Get().cublas_handle_));
+  CURAND_CHECK(hiprandCreateGenerator(&Get().curand_generator_,
+      HIPRAND_RNG_PSEUDO_DEFAULT));
+  CURAND_CHECK(hiprandSetPseudoRandomGeneratorSeed(Get().curand_generator_,
       cluster_seedgen()));
 }
 
 void Caffe::DeviceQuery() {
-  cudaDeviceProp prop;
+  hipDeviceProp_t prop;
   int device;
-  if (cudaSuccess != cudaGetDevice(&device)) {
+  if (hipSuccess != hipGetDevice(&device)) {
     printf("No cuda device present.\n");
     return;
   }
-  CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+  CUDA_CHECK(hipGetDeviceProperties(&prop, device));
   LOG(INFO) << "Device id:                     " << device;
   LOG(INFO) << "Major revision number:         " << prop.major;
   LOG(INFO) << "Minor revision number:         " << prop.minor;
@@ -206,8 +209,9 @@ void Caffe::DeviceQuery() {
   LOG(INFO) << "Clock rate:                    " << prop.clockRate;
   LOG(INFO) << "Total constant memory:         " << prop.totalConstMem;
   LOG(INFO) << "Texture alignment:             " << prop.textureAlignment;
-  LOG(INFO) << "Concurrent copy and execution: "
-      << (prop.deviceOverlap ? "Yes" : "No");
+  // Sanjay
+  // LOG(INFO) << "Concurrent copy and execution: "
+  //     << (prop.deviceOverlap ? "Yes" : "No");
   LOG(INFO) << "Number of multiprocessors:     " << prop.multiProcessorCount;
   LOG(INFO) << "Kernel execution timeout:      "
       << (prop.kernelExecTimeoutEnabled ? "Yes" : "No");
@@ -216,22 +220,22 @@ void Caffe::DeviceQuery() {
 
 bool Caffe::CheckDevice(const int device_id) {
   // This function checks the availability of GPU #device_id.
-  // It attempts to create a context on the device by calling cudaFree(0).
-  // cudaSetDevice() alone is not sufficient to check the availability.
+  // It attempts to create a context on the device by calling hipFree(0).
+  // hipSetDevice() alone is not sufficient to check the availability.
   // It lazily records device_id, however, does not initialize a
   // context. So it does not know if the host thread has the permission to use
   // the device or not.
   //
   // In a shared environment where the devices are set to EXCLUSIVE_PROCESS
-  // or EXCLUSIVE_THREAD mode, cudaSetDevice() returns cudaSuccess
+  // or EXCLUSIVE_THREAD mode, hipSetDevice() returns hipSuccess
   // even if the device is exclusively occupied by another process or thread.
   // Cuda operations that initialize the context are needed to check
-  // the permission. cudaFree(0) is one of those with no side effect,
+  // the permission. hipFree(0) is one of those with no side effect,
   // except the context initialization.
-  bool r = ((cudaSuccess == cudaSetDevice(device_id)) &&
-            (cudaSuccess == cudaFree(0)));
+  bool r = ((hipSuccess == hipSetDevice(device_id)) &&
+            (hipSuccess == hipFree(0)));
   // reset any error that may have occurred.
-  cudaGetLastError();
+  hipGetLastError();
   return r;
 }
 
@@ -241,7 +245,7 @@ int Caffe::FindDevice(const int start_id) {
   // EXCLUSIVE_PROCESS or EXCLUSIVE_THREAD mode, if it succeeds, it also
   // claims the device due to the initialization of the context.
   int count = 0;
-  CUDA_CHECK(cudaGetDeviceCount(&count));
+  CUDA_CHECK(hipGetDeviceCount(&count));
   for (int i = start_id; i < count; i++) {
     if (CheckDevice(i)) return i;
   }
@@ -270,66 +274,66 @@ void* Caffe::RNG::generator() {
   return static_cast<void*>(generator_->rng());
 }
 
-const char* cublasGetErrorString(cublasStatus_t error) {
+const char* cublasGetErrorString(hipblasStatus_t error) {
   switch (error) {
-  case CUBLAS_STATUS_SUCCESS:
-    return "CUBLAS_STATUS_SUCCESS";
-  case CUBLAS_STATUS_NOT_INITIALIZED:
-    return "CUBLAS_STATUS_NOT_INITIALIZED";
-  case CUBLAS_STATUS_ALLOC_FAILED:
-    return "CUBLAS_STATUS_ALLOC_FAILED";
-  case CUBLAS_STATUS_INVALID_VALUE:
-    return "CUBLAS_STATUS_INVALID_VALUE";
-  case CUBLAS_STATUS_ARCH_MISMATCH:
-    return "CUBLAS_STATUS_ARCH_MISMATCH";
-  case CUBLAS_STATUS_MAPPING_ERROR:
-    return "CUBLAS_STATUS_MAPPING_ERROR";
-  case CUBLAS_STATUS_EXECUTION_FAILED:
-    return "CUBLAS_STATUS_EXECUTION_FAILED";
-  case CUBLAS_STATUS_INTERNAL_ERROR:
-    return "CUBLAS_STATUS_INTERNAL_ERROR";
+  case HIPBLAS_STATUS_SUCCESS:
+    return "HIPBLAS_STATUS_SUCCESS";
+  case HIPBLAS_STATUS_NOT_INITIALIZED:
+    return "HIPBLAS_STATUS_NOT_INITIALIZED";
+  case HIPBLAS_STATUS_ALLOC_FAILED:
+    return "HIPBLAS_STATUS_ALLOC_FAILED";
+  case HIPBLAS_STATUS_INVALID_VALUE:
+    return "HIPBLAS_STATUS_INVALID_VALUE";
+  case HIPBLAS_STATUS_ARCH_MISMATCH:
+    return "HIPBLAS_STATUS_ARCH_MISMATCH";
+  case HIPBLAS_STATUS_MAPPING_ERROR:
+    return "HIPBLAS_STATUS_MAPPING_ERROR";
+  case HIPBLAS_STATUS_EXECUTION_FAILED:
+    return "HIPBLAS_STATUS_EXECUTION_FAILED";
+  case HIPBLAS_STATUS_INTERNAL_ERROR:
+    return "HIPBLAS_STATUS_INTERNAL_ERROR";
 #if CUDA_VERSION >= 6000
-  case CUBLAS_STATUS_NOT_SUPPORTED:
-    return "CUBLAS_STATUS_NOT_SUPPORTED";
+  case HIPBLAS_STATUS_NOT_SUPPORTED:
+    return "HIPBLAS_STATUS_NOT_SUPPORTED";
 #endif
 #if CUDA_VERSION >= 6050
-  case CUBLAS_STATUS_LICENSE_ERROR:
-    return "CUBLAS_STATUS_LICENSE_ERROR";
+  case HIPBLAS_STATUS_UNKNOWN:
+    return "HIPBLAS_STATUS_UNKNOWN";
 #endif
   }
   return "Unknown cublas status";
 }
 
-const char* curandGetErrorString(curandStatus_t error) {
+const char* curandGetErrorString(hiprandStatus_t error) {
   switch (error) {
-  case CURAND_STATUS_SUCCESS:
-    return "CURAND_STATUS_SUCCESS";
-  case CURAND_STATUS_VERSION_MISMATCH:
-    return "CURAND_STATUS_VERSION_MISMATCH";
-  case CURAND_STATUS_NOT_INITIALIZED:
-    return "CURAND_STATUS_NOT_INITIALIZED";
-  case CURAND_STATUS_ALLOCATION_FAILED:
-    return "CURAND_STATUS_ALLOCATION_FAILED";
-  case CURAND_STATUS_TYPE_ERROR:
-    return "CURAND_STATUS_TYPE_ERROR";
-  case CURAND_STATUS_OUT_OF_RANGE:
-    return "CURAND_STATUS_OUT_OF_RANGE";
-  case CURAND_STATUS_LENGTH_NOT_MULTIPLE:
-    return "CURAND_STATUS_LENGTH_NOT_MULTIPLE";
-  case CURAND_STATUS_DOUBLE_PRECISION_REQUIRED:
-    return "CURAND_STATUS_DOUBLE_PRECISION_REQUIRED";
-  case CURAND_STATUS_LAUNCH_FAILURE:
-    return "CURAND_STATUS_LAUNCH_FAILURE";
-  case CURAND_STATUS_PREEXISTING_FAILURE:
-    return "CURAND_STATUS_PREEXISTING_FAILURE";
-  case CURAND_STATUS_INITIALIZATION_FAILED:
-    return "CURAND_STATUS_INITIALIZATION_FAILED";
-  case CURAND_STATUS_ARCH_MISMATCH:
-    return "CURAND_STATUS_ARCH_MISMATCH";
-  case CURAND_STATUS_INTERNAL_ERROR:
-    return "CURAND_STATUS_INTERNAL_ERROR";
+  case HIPRAND_STATUS_SUCCESS:
+    return "HIPRAND_STATUS_SUCCESS";
+  case HIPRAND_STATUS_VERSION_MISMATCH:
+    return "HIPRAND_STATUS_VERSION_MISMATCH";
+  case HIPRAND_STATUS_NOT_INITIALIZED:
+    return "HIPRAND_STATUS_NOT_INITIALIZED";
+  case HIPRAND_STATUS_ALLOCATION_FAILED:
+    return "HIPRAND_STATUS_ALLOCATION_FAILED";
+  case HIPRAND_STATUS_TYPE_ERROR:
+    return "HIPRAND_STATUS_TYPE_ERROR";
+  case HIPRAND_STATUS_OUT_OF_RANGE:
+    return "HIPRAND_STATUS_OUT_OF_RANGE";
+  case HIPRAND_STATUS_LENGTH_NOT_MULTIPLE:
+    return "HIPRAND_STATUS_LENGTH_NOT_MULTIPLE";
+  case HIPRAND_STATUS_DOUBLE_PRECISION_REQUIRED:
+    return "HIPRAND_STATUS_DOUBLE_PRECISION_REQUIRED";
+  case HIPRAND_STATUS_LAUNCH_FAILURE:
+    return "HIPRAND_STATUS_LAUNCH_FAILURE";
+  case HIPRAND_STATUS_PREEXISTING_FAILURE:
+    return "HIPRAND_STATUS_PREEXISTING_FAILURE";
+  case HIPRAND_STATUS_INITIALIZATION_FAILED:
+    return "HIPRAND_STATUS_INITIALIZATION_FAILED";
+  case HIPRAND_STATUS_ARCH_MISMATCH:
+    return "HIPRAND_STATUS_ARCH_MISMATCH";
+  case HIPRAND_STATUS_INTERNAL_ERROR:
+    return "HIPRAND_STATUS_INTERNAL_ERROR";
   }
-  return "Unknown curand status";
+  return "Unknown hiprand status";
 }
 
 #endif  // CPU_ONLY

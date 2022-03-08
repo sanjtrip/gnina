@@ -27,7 +27,17 @@ struct gfloat4 : float4 {
 
     __host__ __device__
     float& operator[](int b) {
-      return b == 0 ? x : b == 1 ? y : b == 2 ? z : w;
+      // Sanjay
+      // return b == 0 ? x : b == 1 ? y : b == 2 ? z : w;
+      //
+      if (b == 0)
+	      return x;
+      else if (b == 1)
+	      return y;
+      else if (b == 2)
+	      return z;
+      else 
+	      return w;
     }
     ;
 

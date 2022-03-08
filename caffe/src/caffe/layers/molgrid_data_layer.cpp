@@ -1116,7 +1116,8 @@ void MolGridDataLayer<Dtype>::setLigand(const vector<float3>& coords, const vect
   }
 }
 
-INSTANTIATE_CLASS(MolGridDataLayer);
+// Sanjay
+// INSTANTIATE_CLASS(MolGridDataLayer);
 REGISTER_LAYER_CLASS(MolGridData);
 
 }  // namespace caffe

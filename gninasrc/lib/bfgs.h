@@ -26,7 +26,7 @@
 #include "matrix.h"
 #include "conf_gpu.h"
 #include <numeric>
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
 //TODO: remove?
 #include "quasi_newton.h"
